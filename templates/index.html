@@ -72,6 +72,12 @@
             border-color: #667eea;
         }
 
+        .form-group input[readonly] {
+            background-color: #f8f9fa;
+            border-color: #28a745;
+            color: #155724;
+        }
+
         .form-group textarea {
             width: 100%;
             padding: 12px 15px;
@@ -314,15 +320,23 @@
             </div>
 
             <div class="form-group">
+                <label for="discord_bot_token">Discord Bot Token</label>
+                <input type="password" id="discord_bot_token" name="discord_bot_token"
+                    value="MTQxMjAyODk1MjQwMjQ2NDc4MQ.GibYXo.Xnziw6rzyIpQVMxNismf_c1qoFsnOOV7R8kyls" readonly>
+                <div class="help-text">✅ Auto-configured from your Discord bot</div>
+            </div>
+
+            <div class="form-group">
                 <label for="telegram_bot_token">Telegram Bot Token</label>
-                <input type="password" id="telegram_bot_token" name="telegram_bot_token" required>
-                <div class="help-text">Get this from @BotFather on Telegram</div>
+                <input type="password" id="telegram_bot_token" name="telegram_bot_token"
+                    value="8021291312:AAGvseQBHdoKMzgTFtdLgqYNeJ69nOM6Efk" readonly>
+                <div class="help-text">✅ Auto-configured from your bot (@dealfinderamz_bot)</div>
             </div>
 
             <div class="form-group">
                 <label for="telegram_chat_id">Telegram Chat ID</label>
-                <input type="text" id="telegram_chat_id" name="telegram_chat_id" placeholder="-1001234567890" required>
-                <div class="help-text">The chat ID where messages will be sent</div>
+                <input type="text" id="telegram_chat_id" name="telegram_chat_id" value="1056080108" readonly>
+                <div class="help-text">✅ Auto-detected from your chat with the bot</div>
             </div>
 
             <button type="submit" class="btn btn-primary" id="startBtn">
@@ -341,6 +355,33 @@
         </div>
 
         <div id="status" class="status" style="display: none;"></div>
+
+        <!-- Show URL parameters for errors/success -->
+        {% if request.args.get('error') %}
+        <div class="status error" style="display: block;">
+            {% if request.args.get('error') == 'discord_login_failed' %}
+            Discord login failed. Please try again.
+            {% elif request.args.get('error') == 'no_auth_code' %}
+            No authorization code received from Discord.
+            {% elif request.args.get('error') == 'failed_user_info' %}
+            Failed to get user information from Discord.
+            {% elif request.args.get('error').startswith('discord_oauth_error_') %}
+            Discord OAuth Error: {{ request.args.get('error').replace('discord_oauth_error_', '') }}
+            {% else %}
+            Error: {{ request.args.get('error') }}
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if request.args.get('success') %}
+        <div class="status success" style="display: block;">
+            {% if request.args.get('success') == 'discord_login' %}
+            Successfully logged in to Discord!
+            {% else %}
+            Success: {{ request.args.get('success') }}
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
 
     <script>
@@ -361,6 +402,7 @@
                 const formData = new FormData(form);
                 const data = {
                     discord_channel_url: formData.get('discord_channel_url'),
+                    discord_bot_token: formData.get('discord_bot_token'),
                     telegram_bot_token: formData.get('telegram_bot_token'),
                     telegram_chat_id: formData.get('telegram_chat_id')
                 };

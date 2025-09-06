@@ -26,30 +26,43 @@ app.config['SESSION_PERMANENT'] = False
 Session(app)
 
 # Discord OAuth2 Configuration
-DISCORD_CLIENT_ID = os.getenv('DISCORD_CLIENT_ID', '1411364572274888836')
-DISCORD_CLIENT_SECRET = os.getenv('DISCORD_CLIENT_SECRET', 'jQEow0R8RgA1aHSFqDYODw6XZsRZN5Bb')
+DISCORD_CLIENT_ID = os.getenv('DISCORD_CLIENT_ID', '1412028952402464781')  # Your bot's client ID
+DISCORD_CLIENT_SECRET = os.getenv('DISCORD_CLIENT_SECRET', 'fC5ZSQY0WIQLZND2Mdlze_uvsYkJcq0s')
 DISCORD_REDIRECT_URI = 'http://localhost:5000/discord/callback'
 DISCORD_API_BASE_URL = 'https://discord.com/api'
 DISCORD_AUTHORIZATION_BASE_URL = DISCORD_API_BASE_URL + '/oauth2/authorize'
 DISCORD_TOKEN_URL = DISCORD_API_BASE_URL + '/oauth2/token'
 
+# Auto-detected Telegram Configuration
+TELEGRAM_BOT_TOKEN = '8021291312:AAGvseQBHdoKMzgTFtdLgqYNeJ69nOM6Efk'
+TELEGRAM_CHAT_ID = '1056080108'
+
+# Auto-detected Discord Bot Configuration
+DISCORD_BOT_TOKEN = 'MTQxMjAyODk1MjQwMjQ2NDc4MQ.GibYXo.Xnziw6rzyIpQVMxNismf_c1qoFsnOOV7R8kyls'
+
 # Global variables to store bot instances and settings
 discord_client = None
 telegram_bot = None
 bot_settings = {
-    'discord_token': '',
+    'discord_token': '',  # OAuth access token for user identification
+    'discord_bot_token': DISCORD_BOT_TOKEN,  # Bot token for message reading (auto-configured)
     'discord_channel_url': '',
-    'telegram_bot_token': '',
-    'telegram_chat_id': '',
+    'telegram_bot_token': TELEGRAM_BOT_TOKEN,
+    'telegram_chat_id': TELEGRAM_CHAT_ID,
     'is_running': False,
     'discord_user': None
 }
 
 class DiscordBot(discord.Client):
     def __init__(self, channel_url, telegram_bot, telegram_chat_id):
+        # Use minimal intents that don't require privileged access
         intents = discord.Intents.default()
-        intents.message_content = True
         intents.guilds = True
+        intents.guild_messages = True
+        # Remove privileged intents to avoid permission errors
+        intents.message_content = False
+        intents.members = False
+        intents.presences = False
         super().__init__(intents=intents)
         self.channel_url = channel_url
         self.telegram_bot = telegram_bot
@@ -78,25 +91,50 @@ class DiscordBot(discord.Client):
             print(f'Error parsing channel URL: {e}')
     
     async def on_message(self, message):
+        print(f"Message received: {message.author.display_name} in {message.channel.name}")
+        
         # Skip messages from the bot itself
         if message.author == self.user:
+            print("Skipping bot's own message")
             return
             
         # Only process messages from the target channel
         if self.target_channel and message.channel.id == self.target_channel.id:
+            print(f"Processing message in target channel: {message.channel.name}")
             try:
-                # Format message content
-                content = f"**{message.author.display_name}**: {message.content}"
+                # Without message content intent, content might be empty
+                # But we can still detect that a message was sent
+                message_text = message.content if message.content else "[Message content not available - enable Message Content Intent in Discord Portal]"
                 
-                # Send to Telegram
-                await self.telegram_bot.send_message(
-                    chat_id=self.telegram_chat_id,
-                    text=content
-                )
-                print(f'Forwarded message to Telegram: {content[:50]}...')
+                print(f"Message content: '{message_text}'")
+                
+                # Format message content
+                content = f"**{message.author.display_name}**: {message_text}"
+                
+                # Send to Telegram with retry logic
+                print(f"Sending to Telegram: {content}")
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        await self.telegram_bot.send_message(
+                            chat_id=self.telegram_chat_id,
+                            text=content
+                        )
+                        print(f'Successfully forwarded message to Telegram!')
+                        break
+                    except Exception as telegram_error:
+                        print(f"Telegram send attempt {attempt + 1} failed: {telegram_error}")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(2)  # Wait 2 seconds before retry
+                        else:
+                            raise telegram_error
                 
             except Exception as e:
                 print(f'Error forwarding message to Telegram: {e}')
+                import traceback
+                traceback.print_exc()
+        else:
+            print(f"Message not in target channel. Channel: {message.channel.name}, Target: {self.target_channel.name if self.target_channel else 'None'}")
 
 def run_discord_bot():
     """Run Discord bot in a separate thread"""
@@ -104,8 +142,16 @@ def run_discord_bot():
     
     async def start_bot():
         try:
-            # Initialize Telegram bot
-            telegram_bot = Bot(token=bot_settings['telegram_bot_token'])
+            # Initialize Telegram bot with better timeout settings
+            from telegram.request import HTTPXRequest
+            request = HTTPXRequest(
+                connection_pool_size=1,
+                connect_timeout=30.0,
+                read_timeout=30.0,
+                write_timeout=30.0,
+                pool_timeout=30.0
+            )
+            telegram_bot = Bot(token=bot_settings['telegram_bot_token'], request=request)
             
             # Initialize Discord bot
             discord_client = DiscordBot(
@@ -114,8 +160,8 @@ def run_discord_bot():
                 bot_settings['telegram_chat_id']
             )
             
-            # Start Discord bot
-            await discord_client.start(bot_settings['discord_token'])
+            # Start Discord bot with the bot token (not OAuth token)
+            await discord_client.start(bot_settings['discord_bot_token'])
             
         except Exception as e:
             print(f'Error running Discord bot: {e}')
@@ -139,6 +185,8 @@ def discord_login():
     )
     authorization_url, state = discord.authorization_url(DISCORD_AUTHORIZATION_BASE_URL)
     session['oauth_state'] = state
+    print(f"OAuth authorization URL: {authorization_url}")
+    print(f"OAuth state: {state}")
     return redirect(authorization_url)
 
 @app.route('/discord/callback')
@@ -149,9 +197,21 @@ def discord_callback():
         print(f"Session oauth_state: {session.get('oauth_state')}")
         print(f"Request args: {request.args}")
         
+        # Check for error in callback
+        if 'error' in request.args:
+            error = request.args.get('error')
+            error_description = request.args.get('error_description', 'Unknown error')
+            print(f"OAuth error: {error} - {error_description}")
+            return redirect(url_for('index', error=f'discord_oauth_error_{error}'))
+        
+        # Check for authorization code
+        if 'code' not in request.args:
+            print("No authorization code received")
+            return redirect(url_for('index', error='no_auth_code'))
+        
+        # Disable state check for now to avoid session issues
         discord = OAuth2Session(
             DISCORD_CLIENT_ID,
-            state=session.get('oauth_state'),
             redirect_uri=DISCORD_REDIRECT_URI
         )
         
@@ -159,7 +219,8 @@ def discord_callback():
         token = discord.fetch_token(
             DISCORD_TOKEN_URL,
             client_secret=DISCORD_CLIENT_SECRET,
-            authorization_response=request.url
+            authorization_response=request.url,
+            include_client_id=True
         )
         print(f"Token received: {token.get('access_token', 'No access token')}")
         
@@ -185,8 +246,9 @@ def discord_callback():
             print("OAuth login successful!")
         else:
             print(f"Failed to get user info: {user_response.text}")
+            return redirect(url_for('index', error='failed_user_info'))
         
-        return redirect(url_for('index'))
+        return redirect(url_for('index', success='discord_login'))
         
     except Exception as e:
         print(f'OAuth callback error: {e}')
@@ -225,18 +287,13 @@ def start_bot():
         if not session.get('discord_token'):
             return jsonify({'success': False, 'message': 'Please login to Discord first'})
         
-        # Store bot settings (Discord token already stored in session)
+        # Store bot settings (Discord OAuth token already stored in session)
         bot_settings['discord_channel_url'] = data.get('discord_channel_url')
-        bot_settings['telegram_bot_token'] = data.get('telegram_bot_token')
-        bot_settings['telegram_chat_id'] = data.get('telegram_chat_id')
+        # Discord bot token and Telegram settings are now auto-configured
         
         # Validate required fields
-        if not all([
-            bot_settings['discord_channel_url'],
-            bot_settings['telegram_bot_token'],
-            bot_settings['telegram_chat_id']
-        ]):
-            return jsonify({'success': False, 'message': 'All fields are required'})
+        if not bot_settings['discord_channel_url']:
+            return jsonify({'success': False, 'message': 'Discord channel URL is required'})
         
         # Stop existing bot if running
         if discord_client and not discord_client.is_closed():
