@@ -18,7 +18,7 @@ FLASK_PORT = int(os.getenv('FLASK_PORT', 5000))
 FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
 
 # Redirect URI for Discord OAuth (should match what you set in Discord app settings)
-DISCORD_REDIRECT_URI = f'http://localhost:{FLASK_PORT}/discord/callback'
+DISCORD_REDIRECT_URI = os.getenv('DISCORD_REDIRECT_URI', f'http://localhost:{FLASK_PORT}/discord/callback')
 
 # Discord API URLs
 DISCORD_API_BASE_URL = 'https://discord.com/api'

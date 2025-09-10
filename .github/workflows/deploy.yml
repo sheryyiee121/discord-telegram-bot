@@ -1,0 +1,61 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          # Stop the service
+          sudo systemctl stop discord-bot || true
+          
+          # Create backup
+          sudo cp -r /home/ubuntu/discord-bot /home/ubuntu/discord-bot.backup.$(date +%Y%m%d_%H%M%S) || true
+          
+          # Update application files
+          cd /home/ubuntu/discord-bot
+          git pull origin main
+          
+          # Install dependencies
+          pip3 install -r requirements.txt
+          
+          # Update systemd service
+          sudo cp discord-bot.service /etc/systemd/system/
+          sudo systemctl daemon-reload
+          
+          # Update nginx configuration
+          sudo cp discord-bot-nginx.conf /etc/nginx/sites-available/discord-bot
+          sudo ln -sf /etc/nginx/sites-available/discord-bot /etc/nginx/sites-enabled/
+          sudo nginx -t
+          
+          # Restart services
+          sudo systemctl restart nginx
+          sudo systemctl start discord-bot
+          sudo systemctl enable discord-bot
+          
+          # Check status
+          sudo systemctl status discord-bot --no-pager -l

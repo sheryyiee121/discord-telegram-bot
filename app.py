@@ -12,13 +12,13 @@ from requests_oauthlib import OAuth2Session
 from flask_session import Session
 import secrets
 
-# Allow HTTP for local development (OAuth2 normally requires HTTPS)
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+# OAuth2 transport setting - use environment variable
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = os.getenv('OAUTHLIB_INSECURE_TRANSPORT', '0')
 
-load_dotenv()
+load_dotenv('production.env')
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(32)
+app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(32))
 
 # Configure Flask-Session
 app.config['SESSION_TYPE'] = 'filesystem'
@@ -26,9 +26,9 @@ app.config['SESSION_PERMANENT'] = False
 Session(app)
 
 # Discord OAuth2 Configuration
-DISCORD_CLIENT_ID = os.getenv('DISCORD_CLIENT_ID', '1412028952402464781')  # Your bot's client ID
-DISCORD_CLIENT_SECRET = os.getenv('DISCORD_CLIENT_SECRET', 'fC5ZSQY0WIQLZND2Mdlze_uvsYkJcq0s')
-DISCORD_REDIRECT_URI = 'http://localhost:5000/discord/callback'
+DISCORD_CLIENT_ID = os.getenv('DISCORD_CLIENT_ID')
+DISCORD_CLIENT_SECRET = os.getenv('DISCORD_CLIENT_SECRET')
+DISCORD_REDIRECT_URI = os.getenv('DISCORD_REDIRECT_URI', 'http://localhost:5000/discord/callback')
 DISCORD_API_BASE_URL = 'https://discord.com/api'
 DISCORD_AUTHORIZATION_BASE_URL = DISCORD_API_BASE_URL + '/oauth2/authorize'
 DISCORD_TOKEN_URL = DISCORD_API_BASE_URL + '/oauth2/token'
