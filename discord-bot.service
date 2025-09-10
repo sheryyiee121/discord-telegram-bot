@@ -6,9 +6,9 @@ After=network.target
 Type=exec
 User=ubuntu
 Group=ubuntu
-WorkingDirectory=/opt/discord-bot
-Environment=PATH=/opt/discord-bot/venv/bin
-ExecStart=/opt/discord-bot/venv/bin/gunicorn --workers 1 --bind 127.0.0.1:5000 --timeout 120 --keep-alive 2 --max-requests 1000 --max-requests-jitter 100 app:app
+WorkingDirectory=/home/ubuntu/discord-telegram-bot
+Environment=PATH=/home/ubuntu/discord-telegram-bot/venv/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 app.py
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always
 RestartSec=10
@@ -21,14 +21,14 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/discord-bot /var/log/discord-bot
+ReadWritePaths=/home/ubuntu/discord-telegram-bot /var/log/discord-bot
 
 # Environment variables
 Environment="FLASK_ENV=production"
-Environment="PYTHONPATH=/opt/discord-bot"
-Environment="DISCORD_CLIENT_ID=your_actual_client_id"
-Environment="DISCORD_CLIENT_SECRET=your_actual_client_secret"
-Environment="DISCORD_REDIRECT_URI=http://13.60.40.184/discord/callback"
+Environment="PYTHONPATH=/home/ubuntu/discord-telegram-bot"
+Environment="DISCORD_CLIENT_ID=1411364572274888836"
+Environment="DISCORD_CLIENT_SECRET=Bd8MwfHxqfu0CdFE231z1Z4AG6aGE52"
+Environment="DISCORD_REDIRECT_URI=https://13.60.40.184/discord/callback"
 Environment="SECRET_KEY=a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456"
 Environment="FLASK_DEBUG=False"
 
