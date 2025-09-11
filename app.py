@@ -178,6 +178,13 @@ def index():
 @app.route('/discord/login')
 def discord_login():
     """Initiate Discord OAuth2 login"""
+    print("\n" + "="*50)
+    print("DISCORD LOGIN INITIATED")
+    print("="*50)
+    print(f"Client ID: {DISCORD_CLIENT_ID}")
+    print(f"Redirect URI: {DISCORD_REDIRECT_URI}")
+    print(f"Authorization Base URL: {DISCORD_AUTHORIZATION_BASE_URL}")
+    
     discord = OAuth2Session(
         DISCORD_CLIENT_ID,
         redirect_uri=DISCORD_REDIRECT_URI,
@@ -185,17 +192,32 @@ def discord_login():
     )
     authorization_url, state = discord.authorization_url(DISCORD_AUTHORIZATION_BASE_URL)
     session['oauth_state'] = state
+    
+    # Debug: Check if URL has encoding issues
     print(f"OAuth authorization URL: {authorization_url}")
     print(f"OAuth state: {state}")
+    
+    # Fix any URL encoding issues
+    if "+++" in authorization_url:
+        print("WARNING: Found +++ in authorization URL, fixing...")
+        authorization_url = authorization_url.replace("+++", "")
+    print("="*50 + "\n")
     return redirect(authorization_url)
 
 @app.route('/discord/callback')
 def discord_callback():
     """Handle Discord OAuth2 callback"""
     try:
+        print("\n" + "="*50)
+        print("DISCORD OAUTH CALLBACK DEBUG")
+        print("="*50)
         print(f"OAuth callback received. Request URL: {request.url}")
         print(f"Session oauth_state: {session.get('oauth_state')}")
         print(f"Request args: {request.args}")
+        print(f"DISCORD_CLIENT_ID: {DISCORD_CLIENT_ID}")
+        print(f"DISCORD_CLIENT_SECRET: {DISCORD_CLIENT_SECRET[:10]}..." if DISCORD_CLIENT_SECRET else "DISCORD_CLIENT_SECRET: None")
+        print(f"DISCORD_REDIRECT_URI: {DISCORD_REDIRECT_URI}")
+        print("="*50)
         
         # Check for error in callback
         if 'error' in request.args:
@@ -215,14 +237,27 @@ def discord_callback():
             redirect_uri=DISCORD_REDIRECT_URI
         )
         
+        print("\n--- TOKEN EXCHANGE DEBUG ---")
+        print(f"Token URL: {DISCORD_TOKEN_URL}")
+        print(f"Client ID: {DISCORD_CLIENT_ID}")
+        print(f"Client Secret exists: {bool(DISCORD_CLIENT_SECRET)}")
+        print(f"Authorization Response URL: {request.url}")
+        print(f"Redirect URI being sent: {DISCORD_REDIRECT_URI}")
         print("Attempting to fetch token...")
-        token = discord.fetch_token(
-            DISCORD_TOKEN_URL,
-            client_secret=DISCORD_CLIENT_SECRET,
-            authorization_response=request.url,
-            include_client_id=True
-        )
-        print(f"Token received: {token.get('access_token', 'No access token')}")
+        
+        try:
+            token = discord.fetch_token(
+                DISCORD_TOKEN_URL,
+                client_secret=DISCORD_CLIENT_SECRET,
+                authorization_response=request.url,
+                include_client_id=True
+            )
+            print(f"Token received successfully!")
+            print(f"Access token: {token.get('access_token', 'No access token')[:20]}...")
+        except Exception as token_error:
+            print(f"TOKEN EXCHANGE ERROR: {token_error}")
+            print(f"Error type: {type(token_error).__name__}")
+            raise token_error
         
         # Store the access token
         session['discord_token'] = token['access_token']
