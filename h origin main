@@ -1,0 +1,5 @@
+[33ma10e511[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Add multiple Discord channel support and ChatGPT integration - API key secured
+[33mba257d0[m sadsds
+[33m69c69a3[m[33m ([m[1;31morigin/main[m[33m)[m Fix OAuth redirect_uri error - remove duplicate parameter in fetch_token
+[33m79a18c9[m Fix systemd service - update paths to correct directory and use python3 instead of gunicorn
+[33m761264e[m Fix nginx gzip_proxied directive - remove invalid must-revalidate value
