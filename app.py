@@ -42,7 +42,7 @@ TELEGRAM_CHAT_ID = '1056080108'
 DISCORD_BOT_TOKEN = 'MTQxMjAyODk1MjQwMjQ2NDc4MQ.GibYXo.Xnziw6rzyIpQVMxNismf_c1qoFsnOOV7R8kyls'
 
 # ChatGPT Configuration
-OPENAI_API_KEY = 'sk-3aTEoan7OkAqyopWuhT8J6o8s77IEeUxI3bf8VWFEXT3BlbkFJHxeeEpxFdMsTagEfaEGDrEJf6E52h8F9QR8kacFFYA'
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # Global variables to store bot instances and settings
 discord_client = None
