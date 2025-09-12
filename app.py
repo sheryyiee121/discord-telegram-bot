@@ -11,6 +11,7 @@ import requests
 from requests_oauthlib import OAuth2Session
 from flask_session import Session
 import secrets
+import openai
 
 # OAuth2 transport setting - use environment variable
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = os.getenv('OAUTHLIB_INSECURE_TRANSPORT', '0')
@@ -40,55 +41,91 @@ TELEGRAM_CHAT_ID = '1056080108'
 # Auto-detected Discord Bot Configuration
 DISCORD_BOT_TOKEN = 'MTQxMjAyODk1MjQwMjQ2NDc4MQ.GibYXo.Xnziw6rzyIpQVMxNismf_c1qoFsnOOV7R8kyls'
 
+# ChatGPT Configuration
+OPENAI_API_KEY = 'sk-3aTEoan7OkAqyopWuhT8J6o8s77IEeUxI3bf8VWFEXT3BlbkFJHxeeEpxFdMsTagEfaEGDrEJf6E52h8F9QR8kacFFYA'
+
 # Global variables to store bot instances and settings
 discord_client = None
 telegram_bot = None
 bot_settings = {
     'discord_token': '',  # OAuth access token for user identification
     'discord_bot_token': DISCORD_BOT_TOKEN,  # Bot token for message reading (auto-configured)
-    'discord_channel_url': '',
+    'discord_channel_urls': [],  # Multiple channel URLs
     'telegram_bot_token': TELEGRAM_BOT_TOKEN,
     'telegram_chat_id': TELEGRAM_CHAT_ID,
     'is_running': False,
-    'discord_user': None
+    'discord_user': None,
+    'enable_customization': False,
+    'custom_prompt': ''
 }
 
 class DiscordBot(discord.Client):
-    def __init__(self, channel_url, telegram_bot, telegram_chat_id):
+    def __init__(self, channel_urls, telegram_bot, telegram_chat_id, enable_customization=False, custom_prompt=""):
         # Use minimal intents that don't require privileged access
         intents = discord.Intents.default()
         intents.guilds = True
         intents.guild_messages = True
-        # Remove privileged intents to avoid permission errors
-        intents.message_content = False
+        # Enable message content intent for ChatGPT processing
+        intents.message_content = True
         intents.members = False
         intents.presences = False
         super().__init__(intents=intents)
-        self.channel_url = channel_url
+        self.channel_urls = channel_urls if isinstance(channel_urls, list) else [channel_urls]
         self.telegram_bot = telegram_bot
         self.telegram_chat_id = telegram_chat_id
-        self.target_channel = None
+        self.target_channels = []
+        self.enable_customization = enable_customization
+        self.custom_prompt = custom_prompt
+        # Set up OpenAI
+        openai.api_key = OPENAI_API_KEY
+    
+    async def process_message_with_gpt(self, message_content, author_name):
+        """Process message with ChatGPT if customization is enabled"""
+        if not self.enable_customization:
+            return f"**{author_name}**: {message_content}"
+        
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": self.custom_prompt},
+                    {"role": "user", "content": f"Discord message from {author_name}: {message_content}"}
+                ],
+                max_tokens=300,
+                temperature=0.7
+            )
+            
+            processed_message = response.choices[0].message.content
+            return f"**{author_name}** (processed): {processed_message}"
+        except Exception as e:
+            print(f"Error processing message with GPT: {e}")
+            # Fallback to original message if GPT fails
+            return f"**{author_name}**: {message_content}"
         
     async def on_ready(self):
         print(f'Discord bot logged in as {self.user}')
-        # Extract channel ID from URL and join channel
-        try:
-            if '/channels/' in self.channel_url:
-                parts = self.channel_url.split('/channels/')[-1].split('/')
-                guild_id = int(parts[0])
-                channel_id = int(parts[1])
-                
-                guild = self.get_guild(guild_id)
-                if guild:
-                    self.target_channel = guild.get_channel(channel_id)
-                    if self.target_channel:
-                        print(f'Successfully found channel: {self.target_channel.name}')
+        # Extract channel IDs from URLs and join channels
+        for channel_url in self.channel_urls:
+            try:
+                if '/channels/' in channel_url:
+                    parts = channel_url.split('/channels/')[-1].split('/')
+                    guild_id = int(parts[0])
+                    channel_id = int(parts[1])
+                    
+                    guild = self.get_guild(guild_id)
+                    if guild:
+                        channel = guild.get_channel(channel_id)
+                        if channel:
+                            self.target_channels.append(channel)
+                            print(f'Successfully found channel: {channel.name} in {guild.name}')
+                        else:
+                            print(f'Channel not found for URL: {channel_url}')
                     else:
-                        print('Channel not found')
-                else:
-                    print('Guild not found')
-        except Exception as e:
-            print(f'Error parsing channel URL: {e}')
+                        print(f'Guild not found for URL: {channel_url}')
+            except Exception as e:
+                print(f'Error parsing channel URL {channel_url}: {e}')
+        
+        print(f'Monitoring {len(self.target_channels)} channels')
     
     async def on_message(self, message):
         print(f"Message received: {message.author.display_name} in {message.channel.name}")
@@ -98,18 +135,23 @@ class DiscordBot(discord.Client):
             print("Skipping bot's own message")
             return
             
-        # Only process messages from the target channel
-        if self.target_channel and message.channel.id == self.target_channel.id:
+        # Check if message is from any of the target channels
+        is_target_channel = any(channel.id == message.channel.id for channel in self.target_channels)
+        
+        if is_target_channel:
             print(f"Processing message in target channel: {message.channel.name}")
             try:
-                # Without message content intent, content might be empty
-                # But we can still detect that a message was sent
+                # Get message content
                 message_text = message.content if message.content else "[Message content not available - enable Message Content Intent in Discord Portal]"
                 
                 print(f"Message content: '{message_text}'")
                 
-                # Format message content
-                content = f"**{message.author.display_name}**: {message_text}"
+                # Process message with ChatGPT if customization is enabled
+                if self.enable_customization and message_text:
+                    content = await self.process_message_with_gpt(message_text, message.author.display_name)
+                else:
+                    # Format message content normally
+                    content = f"**{message.author.display_name}**: {message_text}"
                 
                 # Send to Telegram with retry logic
                 print(f"Sending to Telegram: {content}")
@@ -134,7 +176,7 @@ class DiscordBot(discord.Client):
                 import traceback
                 traceback.print_exc()
         else:
-            print(f"Message not in target channel. Channel: {message.channel.name}, Target: {self.target_channel.name if self.target_channel else 'None'}")
+            print(f"Message not in target channels. Channel: {message.channel.name}")
 
 def run_discord_bot():
     """Run Discord bot in a separate thread"""
@@ -155,9 +197,11 @@ def run_discord_bot():
             
             # Initialize Discord bot
             discord_client = DiscordBot(
-                bot_settings['discord_channel_url'],
+                bot_settings['discord_channel_urls'],
                 telegram_bot,
-                bot_settings['telegram_chat_id']
+                bot_settings['telegram_chat_id'],
+                bot_settings.get('enable_customization', False),
+                bot_settings.get('custom_prompt', '')
             )
             
             # Start Discord bot with the bot token (not OAuth token)
@@ -323,12 +367,14 @@ def start_bot():
             return jsonify({'success': False, 'message': 'Please login to Discord first'})
         
         # Store bot settings (Discord OAuth token already stored in session)
-        bot_settings['discord_channel_url'] = data.get('discord_channel_url')
+        bot_settings['discord_channel_urls'] = data.get('discord_channel_urls', [])
+        bot_settings['enable_customization'] = data.get('enable_customization', False)
+        bot_settings['custom_prompt'] = data.get('custom_prompt', '')
         # Discord bot token and Telegram settings are now auto-configured
         
         # Validate required fields
-        if not bot_settings['discord_channel_url']:
-            return jsonify({'success': False, 'message': 'Discord channel URL is required'})
+        if not bot_settings['discord_channel_urls'] or len(bot_settings['discord_channel_urls']) == 0:
+            return jsonify({'success': False, 'message': 'At least one Discord channel URL is required'})
         
         # Stop existing bot if running
         if discord_client and not discord_client.is_closed():
