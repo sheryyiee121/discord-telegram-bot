@@ -34,9 +34,9 @@ DISCORD_API_BASE_URL = 'https://discord.com/api'
 DISCORD_AUTHORIZATION_BASE_URL = DISCORD_API_BASE_URL + '/oauth2/authorize'
 DISCORD_TOKEN_URL = DISCORD_API_BASE_URL + '/oauth2/token'
 
-# Auto-detected Telegram Configuration
-TELEGRAM_BOT_TOKEN = '8021291312:AAGvseQBHdoKMzgTFtdLgqYNeJ69nOM6Efk'
-TELEGRAM_CHAT_ID = '1056080108'
+# Telegram Configuration from environment
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8021291312:AAGvseQBHdoKMzgTFtdLgqYNeJ69nOM6Efk')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '-1001002840428854')
 
 # Auto-detected Discord Bot Configuration
 DISCORD_BOT_TOKEN = 'MTQxMjAyODk1MjQwMjQ2NDc4MQ.GibYXo.Xnziw6rzyIpQVMxNismf_c1qoFsnOOV7R8kyls'
